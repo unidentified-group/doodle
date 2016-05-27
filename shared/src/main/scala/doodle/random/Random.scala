@@ -1,45 +1,34 @@
 package doodle
 package random
 
-import cats.Monad
-import scala.util.{Random => Rng}
+import cats.free.Free
 
-final case class Random[A](generator: Rng => A) { self =>
-  def run(rng: Rng): A =
-    generator(rng)
-
-  def map[B](f: A => B): Random[B] =
-    Random(rng => f(self.run(rng)))
-
-  def flatMap[B](f: A => Random[B]): Random[B] =
-    Random(rng => f(self.run(rng)).run(rng))
-}
 object Random {
+  import RandomOp._
+
+  def always[A](in: A): Random[A] =
+    Free.pure(in)
 
   def int: Random[Int] =
-    Random(rng => rng.nextInt())
+    Free.liftF[RandomOp,Int](RInt)
 
-  def positiveIntLessThan(upperLimit: Int): Random[Int] =
-    Random(rng => rng.nextInt(upperLimit))
+  def natural(upperLimit: Int): Random[Int] =
+    Free.liftF[RandomOp,Int](Natural(upperLimit))
 
   def double: Random[Double] =
-    Random(rng => rng.nextDouble())
+    Free.liftF[RandomOp,Double](RDouble)
 
-  def gaussian: Random[Double] =
-    Random(rng => rng.nextGaussian())
-
-  def gaussian(mean: Double, stdDev: Double): Random[Double] =
-    gaussian map (x => (stdDev * x) + mean)
-
-
-  implicit object randomInstances extends Monad[Random] {
-    override def flatMap[A, B](fa: Random[A])(f: (A) ⇒ Random[B]): Random[B] =
-      fa.flatMap(f)
-
-    override def map[A, B](fa: Random[A])(f: (A) => B): Random[B] =
-      fa.map(f)
-
-    override def pure[A](x: A): Random[A] =
-      Random(rng => x)
+  def oneOf[A](elts: A*): Random[A] = {
+    val length = elts.length
+    Random.natural(length) map (idx => elts(idx))
   }
+
+  def discrete[A](elts: (A, Double)*): Random[A] =
+    ???
+
+  def normal: Random[Double] =
+    Free.liftF[RandomOp,Double](Gaussian)
+
+  def normal(mean: Double, stdDev: Double): Random[Double] =
+    normal map (x => (stdDev * x) + mean)
 }

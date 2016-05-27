@@ -4,7 +4,7 @@ Copyright 2015 [Underscore](http://underscore.io).
 
 A Scala library for compositional vector graphics,
 with a native back-end via Swing and Java2D,
-and an HTML canvas backend via [Scala.js](http://www.scala-js.org/).
+and an HTML SVG backend via [Scala.js](http://www.scala-js.org/).
 
 Distributed under the [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) license.
 
@@ -13,7 +13,7 @@ Distributed under the [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.tx
 
 # Using Doodle 
 
-You can use Doodle in your own project by importing the JARs published to our [Bintray repository][bintray-training]. The current release is **`0.5.0`**. To use it add the following to your `build.sbt`:
+You can use Doodle in your own project by importing the JARs published to our [Bintray repository][bintray-training]. The current release is **`0.6.1`**. To use it add the following to your `build.sbt`:
 
 [bintray-training]: https://bintray.com/underscoreio/training/doodle
 
@@ -22,7 +22,7 @@ scalaVersion := "2.11.8" // Doodle is compatible with Scala 2.11 only
 
 resolvers += Resolver.bintrayRepo("underscoreio", "training")
 
-libraryDependencies += "underscoreio" %% "doodle" % "0.5.0"
+libraryDependencies += "underscoreio" %% "doodle" % "0.6.1"
 ~~~
 
 Alternatively you can `git clone` or download Doodle and use it directly from the SBT console. See the instructions below.
@@ -60,6 +60,14 @@ Below we have a few tips to get you started.
     ~~~
 
     A window should appear containing a red circle.
+    
+4.  You can also save your masterpieces to a file.
+
+    ~~~ scala
+    scala> (circle(10) fillColor Color.red).save[Png]("masterpiece.png")
+    ~~~
+    
+    Doodle currently supports saving to PNG and PDF formats. Just alter the type parameter of `save` accordingly.
 
 ## Drawing in the Browser
 
@@ -82,7 +90,7 @@ You can also draw Doodle pictures in the browser. The process is slightly differ
     ~~~
 
 4.  Open your browser and point to `http://localhost:12345/index.html`
-    to see an HTML 5 canvas version of the code.
+    to see an SVG version of the code.
 
 ## Viewing the Examples
 

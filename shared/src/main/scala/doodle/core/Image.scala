@@ -1,4 +1,7 @@
-package doodle.core
+package doodle
+package core
+
+import doodle.core.font.Font
 
 sealed abstract class Image extends Product with Serializable {
   def beside(right: Image): Image =
@@ -42,6 +45,9 @@ sealed abstract class Image extends Product with Serializable {
 
   def noFill: Image =
     ContextTransform(_.noFill, this)
+
+  def font(font: Font): Image =
+    ContextTransform(_.font(font), this)
 }
 object Image {
 
@@ -53,11 +59,72 @@ object Image {
   def openPath(elements: Seq[PathElement]): Image =
     OpenPath(elements)
 
+  def text(characters: String): Image =
+    Text(characters)
+
   def circle(r: Double): Image =
     Circle(r)
 
   def rectangle(w: Double, h: Double): Image =
     Rectangle(w,h)
+
+  def rightArrow(w: Double, h: Double): Image = {
+    import PathElement._
+
+    val path = List(
+      moveTo(w/2, 0),
+      lineTo(0, h/2),
+
+      lineTo(0, h * 0.2),
+      lineTo(-w/2, h * 0.2),
+      lineTo(-w/2, -h * 0.2),
+      lineTo(0, -h * 0.2),
+
+      lineTo(0, -h/2),
+      lineTo(w/2, 0)
+    )
+
+    closedPath(path)
+  }
+
+  def roundedRectangle(w: Double, h: Double, r: Double): Image = {
+    import PathElement._
+
+    // Clamp radius to the smallest of width and height
+    val radius =
+      if(r > w/2 || r > h/2)
+        (w/2) min (h/2)
+      else
+        r
+
+    // Magic number of drawing circles with bezier curves
+    // See http://spencermortensen.com/articles/bezier-circle/ for approximation
+    // of a circle with a Bezier curve.
+    val c = (4.0/3.0) * (Math.sqrt(2) - 1)
+    val cR = c * radius
+
+    val elts = List(
+      moveTo(w/2 - radius, h/2),
+      curveTo(w/2 - radius + cR, h/2,
+              w/2, h/2 - radius + cR,
+              w/2, h/2 - radius),
+      lineTo(w/2, -h/2 + radius),
+      curveTo(w/2, -h/2 + radius - cR,
+              w/2 - radius + cR, -h/2,
+              w/2 - radius, -h/2),
+      lineTo(-w/2 + radius, -h/2),
+      curveTo(-w/2 + radius - cR, -h/2,
+              -w/2, -h/2 + radius - cR,
+              -w/2, -h/2 + radius),
+      lineTo(-w/2, h/2 - radius),
+      curveTo(-w/2, h/2 - radius + cR,
+              -w/2 + radius - cR, h/2,
+              -w/2 + radius, h/2),
+      lineTo(w/2 - radius, h/2)
+    )
+
+    closedPath(elts)
+  }
 
   def triangle(w: Double, h: Double): Image =
     Triangle(w,h)
@@ -89,6 +156,7 @@ sealed abstract class Path extends Image {
 }
 final case class OpenPath(elements: Seq[PathElement]) extends Path
 final case class ClosedPath(elements: Seq[PathElement]) extends Path
+final case class Text(get: String) extends Image
 final case class Circle(r: Double) extends Image
 final case class Rectangle(w: Double, h: Double) extends Image
 final case class Triangle(w: Double, h: Double) extends Image

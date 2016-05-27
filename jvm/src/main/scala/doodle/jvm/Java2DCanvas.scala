@@ -1,51 +1,34 @@
 package doodle
 package jvm
 
-import doodle.core.{Color, Stroke => DoodleStroke}
-import doodle.backend.Canvas
+import doodle.core._
+import doodle.backend.{Configuration, Draw, Interpreter, Save}
+import doodle.backend.Formats.Png
 
-class Java2DCanvas(panel: CanvasPanel) extends Canvas {
-  import CanvasPanel._
+object Java2DCanvas extends Draw with Save[Png] {
+  implicit val java2DCanvas: Java2DCanvas.type =
+    this
 
-  val queue = panel.queue
-
-  def queueAndRepaint(op: Op) = {
-    queue.add(op)
-    panel.repaint()
+  def draw(interpreter: Configuration => Interpreter, image: Image): Unit = {
+    new CanvasFrame(interpreter, image)
   }
 
-  def setSize(width: Int, height: Int): Unit =
-    queue.add(SetSize(width, height))
-  def setOrigin(x: Int, y: Int): Unit =
-    queue.add(SetOrigin(x, y))
-  def clear(color: Color): Unit =
-    queueAndRepaint(Clear(color))
-  def beginPath(): Unit =
-    queue.add(BeginPath())
-  def bezierCurveTo(cp1x: Double, cp1y: Double, cp2x: Double, cp2y: Double, endX: Double, endY: Double): Unit =
-    queue.add(BezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY))
-  def endPath(): Unit =
-    queue.add(EndPath())
-  def fill(): Unit =
-    queueAndRepaint(Fill())
-  def lineTo(x: Double, y: Double): Unit =
-    queue.add(LineTo(x, y))
-  def moveTo(x: Double, y: Double): Unit =
-    queue.add(MoveTo(x, y))
-  def setFill(color: Color): Unit =
-    queue.add(SetFill(color))
-  def setStroke(stroke: DoodleStroke): Unit =
-    queue.add(SetStroke(stroke))
-  def stroke(): Unit =
-    queueAndRepaint(Stroke())
-  def setAnimationFrameCallback(callback: () => Unit): Unit =
-    queue.add(SetAnimationFrameCallback(callback))
-}
+  def save[F <: Png](fileName: String, interpreter: Configuration => Interpreter, image: Image): Unit = {
+    import java.io.File
+    import java.awt.image.BufferedImage
+    import javax.imageio.ImageIO
 
-object Java2DCanvas {
-  implicit def canvas: Canvas = {
-    val frame = new CanvasFrame()
-    frame.setVisible(true)
-    frame.panel.canvas
-  }
+    val metrics = Java2D.bufferFontMetrics
+    val dc = DrawingContext.blackLines
+    val renderable = interpreter(dc, metrics)(image)
+    val bb = renderable.boundingBox
+
+    val buffer = new BufferedImage(bb.width.ceil.toInt + 40, bb.height.ceil.toInt + 40, BufferedImage.TYPE_INT_ARGB)
+    val bufferCenter = Point.cartesian( (bb.width.ceil + 40) / 2, (bb.height.ceil + 40) / 2 )
+    val graphics = Java2D.setup(buffer.createGraphics())
+    Java2D.draw(graphics, bufferCenter, renderable)
+
+    val file = new File(fileName)
+    ImageIO.write(buffer, "png", file);
+    }
 }

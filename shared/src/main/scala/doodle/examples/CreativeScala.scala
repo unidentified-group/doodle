@@ -4,7 +4,6 @@ package examples
 import doodle.core._
 import doodle.core.Image._
 import doodle.syntax._
-import doodle.backend.StandardInterpreter._
 
 object CreativeScala {
   // Images from Creative Scala
@@ -216,5 +215,187 @@ object CreativeScala {
       })
 
     def line = lineOfStars(5, 10)
+  }
+
+  object randomConcentricCircles {
+    import doodle.random._
+    import cats.syntax.cartesian._
+
+    val randomAngle: Random[Angle] =
+      Random.double.map(x => x.turns)
+
+    def randomColor(s: Normalized, l: Normalized): Random[Color] =
+      randomAngle map (hue => Color.hsl(hue, s, l))
+
+    def randomCircle(r: Double, color: Random[Color]): Random[Image] =
+      color map (fill => Image.circle(r) fillColor fill)
+
+    val randomPastel = randomColor(0.7.normalized, 0.7.normalized)
+
+    def randomConcentricCircles(n: Int): Random[Image] =
+      n match {
+        case 0 => randomCircle(10, randomPastel)
+        case n =>
+          randomConcentricCircles(n-1) |@| randomCircle(n * 10, randomPastel) map {
+            (circles, circle) => circles on circle
+          }
+      }
+  }
+
+  object sequentialBoxes {
+    import doodle.random._
+    import cats.syntax.cartesian._
+
+    val randomAngle: Random[Angle] =
+      Random.double.map(x => x.turns)
+
+    val randomColor: Random[Color] =
+      randomAngle map (hue => Color.hsl(hue, 0.7.normalized, 0.7.normalized))
+
+    val randomSpin: Random[Double] =
+      Random.normal(15.0, 10.0)
+
+    def nextColor(color: Color): Random[Color] =
+      randomSpin map { spin => color.spin(spin.degrees) }
+
+    def coloredRectangle(color: Color): Image =
+       rectangle(20, 20).noLine fillColor color
+
+    // Basic structural recursion 
+    def sequentialBoxes(n: Int, color: Color): Image =
+      n match {
+        case 0 => coloredRectangle(color)
+        case n => coloredRectangle(color) beside sequentialBoxes(n-1, color)
+      }
+
+    // Basic structural recursion modifying both parameters
+    def gradientBoxes(n: Int, color: Color): Image =
+      n match {
+        case 0 => coloredRectangle(color)
+        case n => coloredRectangle(color) beside gradientBoxes(n-1, color.spin(15.degrees))
+      }
+
+    // Structural recursion with applicative
+    def randomColorBoxes(n: Int): Random[Image] =
+      n match {
+        case 0 => randomColor map { c => coloredRectangle(c) }
+        case n =>
+          val box = randomColor map { c => coloredRectangle(c) }
+          val boxes = randomColorBoxes(n-1)
+          (box |@| boxes) map { (b, bs) => b beside bs }
+      }
+
+    // Structural recursion with applicative (with sometimes more pleasing result)
+    def noisyGradientBoxes(n: Int, color: Color): Random[Image] =
+      n match {
+        case 0 => nextColor(color) map { c => coloredRectangle(c) }
+        case n =>
+          val box = nextColor(color) map { c => coloredRectangle(c) }
+          val boxes = noisyGradientBoxes(n-1, color.spin(15.degrees))
+          box |@| boxes map { (b, bs) =>  b beside bs }
+      }
+
+    // Structural recursion with monad
+    def randomGradientBoxes(n: Int, color: Color): Random[Image] =
+      n match {
+        case 0 => Random.always(coloredRectangle(color))
+        case n =>
+          val box = coloredRectangle(color)
+          val boxes = nextColor(color) flatMap { c => randomGradientBoxes(n-1, c) }
+          boxes map { b => box beside b }
+      }
+
+    val image: Random[Image] = {
+      val boxes = randomColor flatMap { c => randomGradientBoxes(4, c) }
+      boxes |@| boxes |@| boxes map { (b1, b2, b3) => b1 above b2 above b3 }
+    }
+  }
+
+  object scatterPlot {
+    import doodle.random._
+    import cats.syntax.cartesian._
+
+    val normal = Random.normal(50, 15)
+    val uniform = Random.natural(100).map(x => x.toDouble)
+    val normalSquared = Random.normal map (x => (x * x * 7.5))
+
+    def makePoint(x: Random[Double], y: Random[Double]): Random[Point] =
+      x |@| y map { (x, y) => Point.cartesian(x, y) }
+
+    val iter = (1 to 1000).toList
+
+    def allOn(points: List[Random[Image]]): Random[Image] =
+      points match {
+        case Nil => Random.always(Image.empty)
+        case img :: imgs => img |@| allOn(imgs) map { (i, is) => i on is }
+      }
+
+    val normal2D = makePoint(normal, normal)
+    val uniform2D = makePoint(uniform, uniform)
+    val normalSquared2D = makePoint(normalSquared, normalSquared)
+
+    def point(loc: Point): Image =
+      circle(2).fillColor(Color.cadetBlue.alpha(0.3.normalized)).noLine.at(loc.toVec)
+
+    val spacer = rectangle(20, 20).noLine.noFill
+
+    val image =
+      (allOn(iter.map(i => uniform2D map (point _)))  |@|
+       allOn(iter.map(i => normal2D map (point _))) |@|
+       allOn(iter.map(i => normalSquared2D map (point _)))) map {
+        (s1, s2, s3) => s1 beside spacer beside s2 beside spacer beside s3
+      }
+  }
+
+  object parametricNoise {
+    import doodle.random._
+    import cats.syntax.cartesian._
+
+    def rose(k: Int): Angle => Point =
+      (angle: Angle) => {
+        Point.cartesian((angle * k).cos * angle.cos, (angle * k).cos * angle.sin)
+      }
+
+    def scale(point: Point): Point =
+      Point.polar(point.r * 400, point.angle)
+
+    def perturb(point: Point): Random[Point] =
+      (Random.normal(10.0, 10.0) |@| Random.normal(10.0, 10.0)) map { (x,y) =>
+        Point.cartesian(point.x + x, point.y + y)
+      }
+
+    def randomCircle(point: Point, hue: Angle): Random[Image] = {
+      val at = perturb(point) map (pt => pt.toVec)
+      val size = Random.natural(5) map (r => r + 5)
+      val lightness = Random.double map (l => l.normalized)
+      val alpha = Random.double map (a => a.normalized)
+
+      (size |@| lightness |@| alpha |@| at) map { (r, l, a, at) =>
+        val fill = Color.hsla(hue, l, 0.4.normalized, a)
+        circle(r).noFill.lineColor(fill).at(at)
+      }
+    }
+
+    def perturbedRose(k: Int, hue: Angle): Angle => Random[Image] =
+      rose(k) andThen scale andThen { pt => randomCircle(pt, hue) }
+
+    def allOn(points: List[Random[Image]]): Random[Image] =
+      points match {
+        case Nil => Random.always(Image.empty)
+        case img :: imgs => img |@| allOn(imgs) map { (i, is) => i on is }
+      }
+
+    val image: Random[Image] =
+      allOn(
+        (3 to 7 by 2).toList map { k =>
+          val r = perturbedRose(k, ((k-3) * 30).degrees)
+          allOn(
+            (1 to 360).toList map { d =>
+              val angle = d.degrees
+              r(angle)
+            }
+          )
+        }
+      )
   }
 }
